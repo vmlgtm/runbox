@@ -167,6 +167,12 @@ Every `runbox verify` run generates a reviewable Markdown report containing:
 
 ---
 
+## Example App
+
+- **[vmlgtm/catalyst-shop](https://github.com/vmlgtm/catalyst-shop)** — Multi-route Catalyst (`catalyst-core`) SSR pharmacy & e-commerce app configured with `runbox.config.ts`, 4 route journeys, domain invariants, and `fast-check` fuzzing.
+
+---
+
 ## Development
 
 ```bash

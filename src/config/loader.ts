@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
 import type { RunboxConfig } from "./schema.js";
 
@@ -48,9 +49,17 @@ export async function loadConfig(
     );
   }
 
+  const selfDir = path.dirname(fileURLToPath(import.meta.url));
+  const selfEntry = [
+    path.join(selfDir, "index.js"),
+    path.join(selfDir, "../index.ts"),
+    path.join(selfDir, "../index.js"),
+  ].find((candidate) => fs.existsSync(candidate));
+
   const jiti = createJiti(import.meta.url, {
     interopDefault: true,
     moduleCache: false,
+    ...(selfEntry ? { alias: { runbox: selfEntry } } : {}),
   });
 
   const loaded = await jiti.import(targetPath, { default: true });
