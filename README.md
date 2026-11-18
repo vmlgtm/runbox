@@ -126,9 +126,68 @@ export default defineConfig({
 | Command | Flags | Purpose |
 | :--- | :--- | :--- |
 | `runbox init` | `-f, --force`, `--agent` | Discovers routes, aliases, and dev/start scripts; generates `runbox.config.ts` and `.agents/skills/runbox/SKILL.md`. |
-| `runbox check` | `--diff`, `-c, --config <path>`, `--agent` | Runs static Golden Rule guardrails and walks the reverse import graph from `git status`/`git diff` to affected features. |
-| `runbox verify` | `--diff`, `--feature <id>`, `--fuzz`, `--seed <hex>`, `--url <url>`, `-c, --config <path>`, `--agent` | Runs pre-flight guardrails, boots the server (or attaches to `--url`), runs journeys + telemetry traps + `fast-check` UI fuzzing, and writes `.runbox/proof/report.md`. |
+| `runbox check` | `--diff`, `--tier <p0\|p1\|p2>`, `-c, --config <path>`, `--agent` | Runs static Golden Rule guardrails and walks the reverse import graph from `git status`/`git diff` to affected features. |
+| `runbox verify` | `--diff`, `--feature <id>`, `--tier <p0\|p1\|p2>`, `--fuzz`, `--seed <hex>`, `--url <url>`, `-c, --config <path>`, `--agent` | Runs pre-flight guardrails, boots the server (or attaches to `--url`), runs journeys + telemetry traps + `fast-check` UI fuzzing, and writes `.runbox/proof/report.md`. |
 | `runbox discover [route]` | `--url <url>`, `-c, --config <path>`, `--agent` | Opens a live route in headless Chromium and prints interactive controls (`data-testid`, buttons, inputs) and same-origin links. |
+
+---
+
+## Enterprise `v0.2` Capabilities (`feat/v0.2-enterprise`)
+
+### 1. Federated Feature Contracts (`defineFeature()`) & Blast-Radius Tiers
+Large repositories can co-locate `*.runbox.ts` contracts next to vertical pods instead of maintaining one giant config file. `runbox` auto-discovers `src/**/*.runbox.{ts,js,mjs}` and `.runbox/features/**/*.{ts,js}` (defaulting `files` ownership to the feature file's directory when omitted):
+
+```ts
+// src/js/containers/Cart/Cart.runbox.ts
+import { defineFeature } from "runbox";
+
+export default defineFeature({
+  id: "route-cart",
+  name: "Cart (Cart)",
+  route: "/cart",
+  tier: "p0", // p0 (critical revenue) | p1 (default) | p2
+  persona: "care-plan-member",
+  mocks: [
+    {
+      urlPattern: "**/api/promo**",
+      method: "GET",
+      body: { code: "SAVE20", discount: 20 },
+    },
+  ],
+  journey: async ({ page, step }) => { /* ... */ },
+  assertInvariants: async ({ page }) => { /* ... */ },
+});
+```
+
+In root `runbox.config.ts`, set `blastRadius: { maxLocalFeatures: 2 }` to prioritize `p0` features first and defer lower-tier routes during high-fanout shared edits, or filter explicitly via `runbox verify --tier p0`.
+
+### 2. Built-In Guardrail Presets (`presets`)
+Replace boilerplate guardrail arrays with composable presets:
+- `presets.ssr()` — Blocks `server/**` and `@server/**` imports inside universal/client modules.
+- `presets.catalyst()` — Includes `presets.ssr()` and enforces lazy `split(() => import('@containers/...'))` route declarations in `src/js/routes/index.*`.
+- `presets.strictAgent()` — Blocks fragile `setTimeout` / `requestIdleCallback` race-condition workarounds.
+
+### 3. Personas & Deterministic API Mocks
+Define reusable `personas` (`cookies`, `localStorage`, `headers`) and `mocks` (`page.route` URL interception) in `runbox.config.ts` or per-feature so verification runs deterministically without flaky staging dependencies:
+
+```ts
+import { defineConfig, presets } from "runbox";
+
+export default defineConfig({
+  framework: "catalyst-core",
+  featureGlobs: ["src/**/*.runbox.ts"],
+  blastRadius: { maxLocalFeatures: 2 },
+  personas: {
+    "care-plan-member": {
+      id: "care-plan-member",
+      cookies: [{ name: "session", value: "vip-token" }],
+      localStorage: { carePlan: "active", pincode: "110001" },
+      headers: { "x-runbox-persona": "care-plan-member" },
+    },
+  },
+  guardrails: presets.catalyst(),
+});
+```
 
 ---
 
