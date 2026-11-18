@@ -1,0 +1,14 @@
+{
+  "name": "catalyst-shop-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "@tata1mg/catalyst-core": "^1.0.2",
+    "react": "^18.2.0",
+    "react-router": "^7.0.0"
+  }
+}

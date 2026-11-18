@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.runbox/
+*.log
+.DS_Store
