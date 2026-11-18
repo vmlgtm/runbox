@@ -1,12 +1,19 @@
-export { defineConfig } from "./config/schema.js";
+export { defineConfig, defineFeature } from "./config/schema.js";
+export { presets } from "./config/presets.js";
 export type {
+  BlastRadiusConfig,
   FeatureConfig,
+  FeatureInput,
+  FeatureTier,
   FuzzConfig,
   GlobalInvariants,
   GuardrailRule,
   JourneyContext,
+  NetworkMockConfig,
   PatternRule,
+  PersonaConfig,
   RunboxConfig,
+  RunboxConfigInput,
   ServerConfig,
 } from "./config/schema.js";
 

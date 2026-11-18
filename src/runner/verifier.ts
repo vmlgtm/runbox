@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { FeatureConfig, RunboxConfig } from "../config/schema.js";
+import type { FeatureConfig, PersonaConfig, RunboxConfig } from "../config/schema.js";
 import { launchBrowser } from "../box/browser.js";
 import { withBoxServer } from "../box/server.js";
 import { runFeatureFuzzer, parseSeedHex } from "./fuzzer.js";
@@ -146,7 +146,56 @@ async function verifySingleFeature(params: {
   const targetRoute = feature.sampleRoute ?? feature.route;
   const targetUrl = `${baseUrl}${targetRoute.startsWith("/") ? targetRoute : `/${targetRoute}`}`;
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+
+  // Inject persona headers, cookies, and localStorage before creating the page
+  const activePersona: PersonaConfig | undefined =
+    typeof feature.persona === "string"
+      ? config.personas?.[feature.persona]
+      : feature.persona;
+
+  if (activePersona) {
+    if (activePersona.headers && Object.keys(activePersona.headers).length > 0) {
+      await context.setExtraHTTPHeaders(activePersona.headers);
+    }
+    if (activePersona.cookies && activePersona.cookies.length > 0) {
+      const originHost = new URL(baseUrl).hostname;
+      await context.addCookies(
+        activePersona.cookies.map((c) => ({
+          name: c.name,
+          value: c.value,
+          domain: originHost,
+          path: c.path ?? "/",
+        }))
+      );
+    }
+    if (activePersona.localStorage && Object.keys(activePersona.localStorage).length > 0) {
+      await context.addInitScript((entries: Record<string, string>) => {
+        for (const [key, value] of Object.entries(entries)) {
+          window.localStorage.setItem(key, value);
+        }
+      }, activePersona.localStorage);
+    }
+  }
+
   const page = await context.newPage();
+
+  // Register deterministic network/API fixture mocks
+  const activeMocks = [...(config.mocks ?? []), ...(feature.mocks ?? [])];
+  for (const mock of activeMocks) {
+    await page.route(mock.urlPattern, async (route) => {
+      if (mock.method && route.request().method().toUpperCase() !== mock.method.toUpperCase()) {
+        await route.fallback();
+        return;
+      }
+      const isStringBody = typeof mock.body === "string";
+      await route.fulfill({
+        status: mock.status ?? 200,
+        contentType: mock.contentType ?? (isStringBody ? "text/plain" : "application/json"),
+        body: isStringBody ? (mock.body as string) : JSON.stringify(mock.body),
+      });
+    });
+  }
+
   const telemetry = new TelemetryTrap(page, config.invariants, baseUrl);
 
   const transitions: StateTransition[] = [];

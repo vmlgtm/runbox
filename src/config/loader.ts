@@ -2,13 +2,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
-import type { RunboxConfig } from "./schema.js";
+import { matchesAnyGlob, toPosixPath, walkFiles } from "../utils/glob.js";
+import type { FeatureConfig, RunboxConfig } from "./schema.js";
 
 const DEFAULT_CONFIG_FILENAMES = [
   "runbox.config.ts",
   "runbox.config.mts",
   "runbox.config.js",
   "runbox.config.mjs",
+];
+
+const DEFAULT_FEATURE_GLOBS = [
+  "src/**/*.runbox.ts",
+  "src/**/*.runbox.js",
+  "src/**/*.runbox.mjs",
+  ".runbox/features/**/*.ts",
+  ".runbox/features/**/*.js",
 ];
 
 export interface LoadedConfig {
@@ -63,13 +72,73 @@ export async function loadConfig(
   });
 
   const loaded = await jiti.import(targetPath, { default: true });
-  const config = (loaded as { default?: RunboxConfig })?.default ?? (loaded as RunboxConfig);
+  const rawConfig = (loaded as { default?: RunboxConfig })?.default ?? (loaded as RunboxConfig);
 
-  if (!config || typeof config !== "object" || !Array.isArray(config.features)) {
+  if (!rawConfig || typeof rawConfig !== "object") {
     throw new Error(
-      `Invalid runbox config in ${targetPath}: expected a default export with a \`features\` array.`
+      `Invalid runbox config in ${targetPath}: expected a configuration object.`
     );
   }
 
+  const inlineFeatures = Array.isArray(rawConfig.features) ? [...rawConfig.features] : [];
+  const featureGlobs = rawConfig.featureGlobs ?? DEFAULT_FEATURE_GLOBS;
+  const federatedFeatures = await loadFederatedFeatures(resolvedCwd, featureGlobs, jiti);
+
+  const mergedById = new Map<string, FeatureConfig>();
+  for (const feat of [...inlineFeatures, ...federatedFeatures]) {
+    if (feat && feat.id && !mergedById.has(feat.id)) {
+      mergedById.set(feat.id, feat);
+    }
+  }
+
+  const config: RunboxConfig = {
+    ...rawConfig,
+    features: Array.from(mergedById.values()),
+  };
+
   return { config, configPath: targetPath };
+}
+
+async function loadFederatedFeatures(
+  cwd: string,
+  featureGlobs: string[],
+  jiti: ReturnType<typeof createJiti>
+): Promise<FeatureConfig[]> {
+  if (featureGlobs.length === 0) return [];
+
+  const candidateFiles = new Set<string>(walkFiles(cwd));
+  const dotRunboxFeaturesDir = path.join(cwd, ".runbox", "features");
+  if (fs.existsSync(dotRunboxFeaturesDir)) {
+    for (const rel of walkFiles(dotRunboxFeaturesDir)) {
+      candidateFiles.add(`.runbox/features/${rel}`);
+    }
+  }
+
+  const matchedFiles = Array.from(candidateFiles)
+    .filter((file) => matchesAnyGlob(file, featureGlobs))
+    .sort();
+
+  const discovered: FeatureConfig[] = [];
+
+  for (const relFile of matchedFiles) {
+    const absFile = path.join(cwd, relFile);
+    const mod = await jiti.import(absFile, { default: true });
+    const exported = (mod as { default?: FeatureConfig | FeatureConfig[] })?.default ?? mod;
+    const entries = Array.isArray(exported) ? exported : [exported];
+
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object" || typeof (entry as FeatureConfig).id !== "string") {
+        continue;
+      }
+      const feat = entry as FeatureConfig;
+      const inferredDir = toPosixPath(path.posix.dirname(relFile));
+      const files =
+        feat.files && feat.files.length > 0
+          ? feat.files
+          : [inferredDir === "." ? relFile : `${inferredDir}/**`];
+      discovered.push({ ...feat, files });
+    }
+  }
+
+  return discovered;
 }

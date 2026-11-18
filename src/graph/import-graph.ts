@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import type { FeatureConfig, RunboxConfig } from "../config/schema.js";
+import type { FeatureConfig, FeatureTier, RunboxConfig } from "../config/schema.js";
 import { matchesAnyGlob, toPosixPath, walkFiles } from "../utils/glob.js";
 import {
   SOURCE_EXTENSIONS,
@@ -24,7 +24,14 @@ export interface AffectedFeatureResolution {
   impactedFiles: string[];
   affectedFeatures: FeatureConfig[];
   skippedFeatures: FeatureConfig[];
+  deferredFeatures?: FeatureConfig[];
 }
+
+const TIER_PRIORITY: Record<FeatureTier, number> = {
+  p0: 0,
+  p1: 1,
+  p2: 2,
+};
 
 /**
  * Builds the forward and reverse module dependency graph for a repository,
@@ -142,15 +149,21 @@ export function getFeatureDependencyClosure(
   return visited;
 }
 
+export interface ResolveAffectedOptions {
+  tier?: FeatureTier;
+  maxFeatures?: number;
+}
+
 /**
- * Maps changed files to affected features using both feature entry globs
- * and transitive import graph traversal.
+ * Maps changed files to affected features using feature entry globs,
+ * transitive import graph traversal, criticality tier ordering, and blast-radius caps.
  */
 export function resolveAffectedFeatures(
   cwd: string,
   config: RunboxConfig,
   changedFiles: string[],
-  existingGraph?: ImportGraph
+  existingGraph?: ImportGraph,
+  options: ResolveAffectedOptions = {}
 ): AffectedFeatureResolution {
   const normalizedChanged = Array.from(
     new Set(changedFiles.map((f) => toPosixPath(f).replace(/^\.\//, "")).filter(Boolean))
@@ -162,13 +175,14 @@ export function resolveAffectedFeatures(
       impactedFiles: [],
       affectedFeatures: [],
       skippedFeatures: [...config.features],
+      deferredFeatures: [],
     };
   }
 
   const graph = existingGraph ?? buildImportGraph(cwd, config.aliases);
   const reverseClosure = getTransitiveReverseClosure(graph, normalizedChanged);
 
-  const affectedFeatures: FeatureConfig[] = [];
+  let affectedFeatures: FeatureConfig[] = [];
   const skippedFeatures: FeatureConfig[] = [];
 
   for (const feature of config.features) {
@@ -188,11 +202,37 @@ export function resolveAffectedFeatures(
     }
   }
 
+  // Order affected features by criticality tier (p0 -> p1 -> p2)
+  affectedFeatures.sort(
+    (a, b) => TIER_PRIORITY[a.tier ?? "p1"] - TIER_PRIORITY[b.tier ?? "p1"]
+  );
+
+  if (options.tier) {
+    const filtered: FeatureConfig[] = [];
+    for (const f of affectedFeatures) {
+      if ((f.tier ?? "p1") === options.tier) {
+        filtered.push(f);
+      } else {
+        skippedFeatures.push(f);
+      }
+    }
+    affectedFeatures = filtered;
+  }
+
+  let deferredFeatures: FeatureConfig[] = [];
+  const cap = options.maxFeatures ?? config.blastRadius?.maxLocalFeatures;
+  if (cap && cap > 0 && affectedFeatures.length > cap) {
+    deferredFeatures = affectedFeatures.slice(cap);
+    affectedFeatures = affectedFeatures.slice(0, cap);
+    skippedFeatures.push(...deferredFeatures);
+  }
+
   return {
     changedFiles: normalizedChanged,
     impactedFiles: Array.from(reverseClosure).sort(),
     affectedFeatures,
     skippedFeatures,
+    deferredFeatures,
   };
 }
 

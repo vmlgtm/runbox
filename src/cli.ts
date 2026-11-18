@@ -1,7 +1,7 @@
 import path from "node:path";
 import { Command } from "commander";
 import { loadConfig } from "./config/loader.js";
-import type { FeatureConfig } from "./config/schema.js";
+import type { FeatureConfig, FeatureTier } from "./config/schema.js";
 import { initProject } from "./discovery/init.js";
 import { runGuardrails } from "./graph/guardrails.js";
 import {
@@ -73,27 +73,42 @@ program
     }
   });
 
+function parseTierOption(raw?: string): FeatureTier | undefined {
+  if (!raw) return undefined;
+  const norm = raw.toLowerCase();
+  if (norm === "p0" || norm === "p1" || norm === "p2") {
+    return norm;
+  }
+  throw new Error(`Invalid --tier value "${raw}". Expected p0, p1, or p2.`);
+}
+
 program
   .command("check")
   .description("Run static Golden Rule guardrails and resolve git diff to affected features")
   .option("--diff", "Resolve changed files from git status/diff to affected features")
+  .option("--tier <tier>", "Filter features by criticality tier (p0, p1, p2)")
   .option("-c, --config <path>", "Path to runbox config file")
   .option("--agent", "Emit <500-token self-healing JSON oracle")
-  .action(async (opts: { diff?: boolean; config?: string; agent?: boolean }) => {
+  .action(async (opts: { diff?: boolean; tier?: string; config?: string; agent?: boolean }) => {
     const cwd = process.cwd();
     if (!opts.agent) tui.intro(opts.diff ? "check --diff" : "check");
 
     try {
+      const tier = parseTierOption(opts.tier);
       const { config } = await loadConfig(cwd, opts.config);
       const graph = buildImportGraph(cwd, config.aliases);
       const changedFiles = opts.diff ? getGitChangedFiles(cwd) : [];
       const resolution: AffectedFeatureResolution = opts.diff
-        ? resolveAffectedFeatures(cwd, config, changedFiles, graph)
+        ? resolveAffectedFeatures(cwd, config, changedFiles, graph, { tier })
         : {
             changedFiles: [],
             impactedFiles: [],
-            affectedFeatures: [...config.features],
-            skippedFeatures: [],
+            affectedFeatures: tier
+              ? config.features.filter((f) => (f.tier ?? "p1") === tier)
+              : [...config.features],
+            skippedFeatures: tier
+              ? config.features.filter((f) => (f.tier ?? "p1") !== tier)
+              : [],
           };
 
       const violations = runGuardrails(cwd, config, { graph });
@@ -133,6 +148,7 @@ program
   .description("Boot the ephemeral box, run telemetry traps + journeys + property fuzzing, and emit Proof Bundle")
   .option("--diff", "Only verify features impacted by current git diff")
   .option("--feature <id>", "Verify a specific feature ID from runbox.config.ts")
+  .option("--tier <tier>", "Only verify features matching criticality tier (p0, p1, p2)")
   .option("--fuzz", "Enable fast-check UI property fuzzing with counterexample shrinking")
   .option("--seed <seed>", "Deterministic PRNG seed (hex or integer, e.g. 0x42)")
   .option("--url <url>", "Attach to an already running server URL instead of spawning server.command")
@@ -142,6 +158,7 @@ program
     async (opts: {
       diff?: boolean;
       feature?: string;
+      tier?: string;
       fuzz?: boolean;
       seed?: string;
       url?: string;
@@ -152,6 +169,7 @@ program
       if (!opts.agent) tui.intro(opts.diff ? "verify --diff" : "verify");
 
       try {
+        const tier = parseTierOption(opts.tier);
         const { config } = await loadConfig(cwd, opts.config);
         const graph = buildImportGraph(cwd, config.aliases);
         const violations = runGuardrails(cwd, config, { graph });
@@ -170,12 +188,15 @@ program
           skippedFeatures = config.features.filter((f) => f.id !== opts.feature);
         } else if (opts.diff) {
           const changed = getGitChangedFiles(cwd);
-          const resolution = resolveAffectedFeatures(cwd, config, changed, graph);
+          const resolution = resolveAffectedFeatures(cwd, config, changed, graph, { tier });
           targetFeatures = resolution.affectedFeatures;
           skippedFeatures = resolution.skippedFeatures;
           if (!opts.agent) {
             tui.reportDiffResolution(resolution, true);
           }
+        } else if (tier) {
+          targetFeatures = config.features.filter((f) => (f.tier ?? "p1") === tier);
+          skippedFeatures = config.features.filter((f) => (f.tier ?? "p1") !== tier);
         } else {
           targetFeatures = [...config.features];
         }

@@ -67,6 +67,37 @@ export interface FuzzConfig {
   runs?: number;
 }
 
+export type FeatureTier = "p0" | "p1" | "p2";
+
+export interface PersonaConfig {
+  /** Unique persona identifier (e.g. "care-plan-member"). */
+  id: string;
+  /** Cookies injected into the isolated BrowserContext before navigation. */
+  cookies?: Array<{ name: string; value: string; path?: string }>;
+  /** Key-value pairs seeded into `window.localStorage` before page scripts run. */
+  localStorage?: Record<string, string>;
+  /** Extra HTTP headers attached to requests made by this context. */
+  headers?: Record<string, string>;
+}
+
+export interface NetworkMockConfig {
+  /** Playwright URL glob or pattern (e.g. matching `/api/promo`). */
+  urlPattern: string;
+  /** Optional HTTP method filter (e.g. "GET", "POST"). */
+  method?: string;
+  /** HTTP status code returned by the mock (default: 200). */
+  status?: number;
+  /** Optional Content-Type override (defaults to application/json for objects, text/plain for strings). */
+  contentType?: string;
+  /** Mock response payload (serialized to JSON automatically unless already a string). */
+  body: unknown;
+}
+
+export interface BlastRadiusConfig {
+  /** Maximum number of highest-priority affected features to run locally on large diffs. */
+  maxLocalFeatures?: number;
+}
+
 export interface FeatureConfig {
   /** Unique identifier used for CLI flags (`--feature <id>`). */
   id: string;
@@ -78,12 +109,27 @@ export interface FeatureConfig {
   sampleRoute?: string;
   /** Entry files or globs owning this feature. */
   files: string[];
+  /** Criticality tier used for blast-radius prioritization (`p0` highest, default `p1`). */
+  tier?: FeatureTier;
+  /** Persona name from `config.personas` or inline PersonaConfig applied to this feature's BrowserContext. */
+  persona?: string | PersonaConfig;
+  /** Deterministic network/API mocks applied during verification of this feature. */
+  mocks?: NetworkMockConfig[];
   /** Optional deterministic user journey setup / happy-path verification. */
   journey?: (ctx: JourneyContext) => Promise<void>;
   /** Domain-specific invariant assertions checked after each journey step and fuzz action. */
   assertInvariants?: (ctx: { page: Page; baseUrl: string }) => Promise<void>;
   /** Optional property-based UI fuzzing configuration. */
   fuzz?: FuzzConfig;
+}
+
+export type FeatureInput = Omit<FeatureConfig, "files"> & { files?: string[] };
+
+export function defineFeature(feature: FeatureInput): FeatureConfig {
+  return {
+    ...feature,
+    files: feature.files ?? [],
+  };
 }
 
 export interface RunboxConfig {
@@ -97,10 +143,25 @@ export interface RunboxConfig {
   guardrails?: GuardrailRule[];
   /** Global runtime telemetry traps active across all features. */
   invariants?: GlobalInvariants;
+  /** Globs scanned for co-located `defineFeature()` files (defaults to `*.runbox.*` under `src/`). */
+  featureGlobs?: string[];
+  /** Blast-radius policy capping local verification on high-fanout shared edits. */
+  blastRadius?: BlastRadiusConfig;
+  /** Reusable user personas referenced by name from `feature.persona`. */
+  personas?: Record<string, PersonaConfig>;
+  /** Global network/API mocks applied across all verified features. */
+  mocks?: NetworkMockConfig[];
   /** Feature Map entries linking files to runtime routes, journeys, and invariants. */
   features: FeatureConfig[];
 }
 
-export function defineConfig(config: RunboxConfig): RunboxConfig {
-  return config;
+export type RunboxConfigInput = Omit<RunboxConfig, "features"> & {
+  features?: FeatureConfig[];
+};
+
+export function defineConfig(config: RunboxConfigInput): RunboxConfig {
+  return {
+    ...config,
+    features: config.features ?? [],
+  };
 }
