@@ -226,9 +226,16 @@ Every `runbox verify` run generates a reviewable Markdown report containing:
 
 ---
 
-## Example App
+## Examples
 
-- **[vmlgtm/catalyst-shop](https://github.com/vmlgtm/catalyst-shop)** — Multi-route Catalyst (`catalyst-core`) SSR pharmacy & e-commerce app configured with `runbox.config.ts`, 4 route journeys, domain invariants, and `fast-check` fuzzing.
+- **[`examples/catalyst-shop`](./examples/catalyst-shop)** (also mirrored at **[vmlgtm/catalyst-shop](https://github.com/vmlgtm/catalyst-shop)**) — Full 4-route Catalyst (`catalyst-core`) SSR pharmacy & e-commerce app demonstrating federated `*.runbox.ts` contracts, `presets.catalyst()`, `blastRadius` tiering, a `care-plan-member` persona, and `fast-check` fuzzing:
+
+  ```bash
+  cd examples/catalyst-shop
+  npm install
+  node ../../dist/cli.js check
+  node ../../dist/cli.js verify --tier p0 --fuzz --seed 0x42
+  ```
 
 ---
 
