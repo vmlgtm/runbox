@@ -1,0 +1,46 @@
+┌   runbox v0.1.0  verify
+│
+◆  Guardrails · 0 violations
+│
+◇  Feature: Cart (Cart) (/cart)
+│
+│    ✓ Journey: 2 step(s)
+│
+│    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
+│
+│    ✓ Property Fuzz: 8 runs, 56 transitions (seed: 0x42)
+│
+◇  Feature: Home (Home) (/)
+│
+│    ✓ Journey: 2 step(s)
+│
+│    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
+│
+│    ✓ Property Fuzz: 8 runs, 56 transitions (seed: 0x42)
+│
+◇  Feature: Orders (Orders) (/orders)
+│
+│    ✓ Journey: 1 step(s)
+│
+│    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
+│
+│    ✓ Property Fuzz: 8 runs, 55 transitions (seed: 0x42)
+│
+◇  Feature: Product Detail (ProductDetail) (/product/vit-c)
+│
+│    ✓ Journey: 2 step(s)
+│
+│    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
+│
+│    ✓ Property Fuzz: 8 runs, 56 transitions (seed: 0x42)
+│
+◇  Proof Bundle ─────────────────────────╮
+│                                        │
+│  Report:      .runbox/proof/report.md  │
+│  Transitions: 111 recorded             │
+│  Screenshots: 8 captured               │
+│                                        │
+├────────────────────────────────────────╯
+│
+└  ✔ Verification passed in 36.38s
+

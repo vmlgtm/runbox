@@ -51,3 +51,14 @@ cat .runbox/proof/report.md
 # Or run the app manually in the browser (http://localhost:3005)
 npm start
 ```
+
+---
+
+## Sample `runbox` Outputs
+
+Inspect real captured results from verifying this app in [`sample-proof/`](sample-proof/report.md):
+
+- **[`sample-proof/report.md`](sample-proof/report.md)** — Full 4-route passing Proof Bundle (invariant scorecard, rendered Mermaid `stateDiagram-v2`, and all 8 route screenshots).
+- **[`sample-proof/tui-output.txt`](sample-proof/tui-output.txt)** — Terminal TUI output from `runbox verify --fuzz --seed 0x42`.
+- **[`sample-proof/report-failed.md`](sample-proof/report-failed.md)** — Sample failure Proof Bundle when a discount-cap regression violates `discount <= subtotal`.
+- **[`sample-proof/agent-oracle-failed.json`](sample-proof/agent-oracle-failed.json)** — `<500-token` `--agent` JSON oracle emitted on failure.

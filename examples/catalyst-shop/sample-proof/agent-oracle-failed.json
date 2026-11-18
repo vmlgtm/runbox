@@ -1,0 +1,26 @@
+{
+  "status": "failed",
+  "affectedFeatures": [
+    "route-cart"
+  ],
+  "skippedFeatures": [
+    "route-home",
+    "route-orders",
+    "route-product-id"
+  ],
+  "guardrailViolations": [],
+  "failures": [
+    {
+      "featureId": "route-cart",
+      "violatedInvariant": "domainInvariant",
+      "message": "Cart discount invariant violated: discount=$70 > subtotal=$64",
+      "seed": "0x42",
+      "replayCommand": "runbox verify --feature route-cart --fuzz --seed 0x42 --agent",
+      "minimalReproductionSteps": [
+        "Load /cart"
+      ],
+      "remediation": "Fix state/business invariant violation in src/js/containers/Cart/**: Cart discount invariant violated: discount=$70 > subtotal=$64"
+    }
+  ],
+  "proofReportPath": ".runbox/proof/report.md"
+}

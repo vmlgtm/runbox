@@ -229,6 +229,10 @@ Every `runbox verify` run generates a reviewable Markdown report containing:
 ## Examples
 
 - **[`examples/catalyst-shop`](./examples/catalyst-shop)** (also mirrored at **[vmlgtm/catalyst-shop](https://github.com/vmlgtm/catalyst-shop)**) — Full 4-route Catalyst (`catalyst-core`) SSR pharmacy & e-commerce app demonstrating federated `*.runbox.ts` contracts, `presets.catalyst()`, `blastRadius` tiering, a `care-plan-member` persona, and `fast-check` fuzzing:
+  - **Sample Outputs (no install needed to view):**
+    - **[Passing Proof Bundle (Mermaid Statechart + 8 Screenshots)](./examples/catalyst-shop/sample-proof/report.md)**
+    - **[Terminal TUI Output](./examples/catalyst-shop/sample-proof/tui-output.txt)**
+    - **[Failure Proof Bundle](./examples/catalyst-shop/sample-proof/report-failed.md)** & **[Agent JSON Oracle](./examples/catalyst-shop/sample-proof/agent-oracle-failed.json)**
 
   ```bash
   cd examples/catalyst-shop
