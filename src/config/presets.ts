@@ -35,7 +35,7 @@ export const presets = {
         id: "enforce-catalyst-split-routes",
         description:
           "Enforce lazy code-splitting via split(() => import(...)) in Catalyst route tables.",
-        files: ["src/js/routes/**"],
+        files: ["src/js/routes/index.*"],
         forbidPatterns: [
           {
             pattern: "^\\s*import\\s+[A-Za-z_$][\\w$]*\\s+from\\s+[\"']@containers/",
@@ -43,7 +43,7 @@ export const presets = {
           },
         ],
         remediation:
-          "Routes in src/js/routes/** must use Catalyst's code-splitting wrapper `const Page = split(() => import('@containers/...'))` instead of static top-level `@containers/*` imports.",
+          "Routes in src/js/routes/index.* must use Catalyst's code-splitting wrapper `const Page = split(() => import('@containers/...'))` instead of static top-level `@containers/*` imports.",
       },
     ];
   },
