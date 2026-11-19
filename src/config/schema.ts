@@ -48,6 +48,10 @@ export interface GlobalInvariants {
   noHydrationMismatch?: boolean;
   /** Fail if any same-origin HTTP >= 500 response occurs (default: true). */
   noServer5xx?: boolean;
+  /** Ignore third-party external script console.error messages (default: true). */
+  firstPartyConsoleOnly?: boolean;
+  /** Regex pattern strings of known legacy console errors to ignore. */
+  ignoreConsolePatterns?: string[];
 }
 
 export interface JourneyContext {
@@ -65,6 +69,10 @@ export interface FuzzConfig {
   steps?: number;
   /** Number of fast-check property runs before shrinking (default: 6). */
   runs?: number;
+  /** Allow destructive UI actions and unmocked write HTTP methods during fuzzing (default: false). */
+  allowMutations?: boolean;
+  /** Additional regex pattern strings of button/input labels to skip during fuzzing. */
+  excludeActionPatterns?: string[];
 }
 
 export type FeatureTier = "p0" | "p1" | "p2";
@@ -119,6 +127,8 @@ export interface FeatureConfig {
   journey?: (ctx: JourneyContext) => Promise<void>;
   /** Domain-specific invariant assertions checked after each journey step and fuzz action. */
   assertInvariants?: (ctx: { page: Page; baseUrl: string }) => Promise<void>;
+  /** Optional custom semantic state labeler used when generating Mermaid statecharts. */
+  stateLabel?: (page: Page) => Promise<string>;
   /** Optional property-based UI fuzzing configuration. */
   fuzz?: FuzzConfig;
 }

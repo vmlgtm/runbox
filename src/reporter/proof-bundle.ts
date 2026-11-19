@@ -19,12 +19,20 @@ export function compileMermaidStatechart(transitions: StateTransition[]): string
   for (const t of transitions) {
     const fromId = t.from === "[*]" ? "[*]" : sanitizeStateId(t.from);
     const toId = sanitizeStateId(t.to);
+    // Collapse passing no-op fuzz self-loops while keeping real state transitions, journey steps, and failures
+    if (t.ok && fromId === toId && t.action.startsWith("Fuzz [")) {
+      continue;
+    }
     const label = sanitizeTransitionLabel(t.action);
     const line = `    ${fromId} --> ${toId}: ${label}`;
     if (!seen.has(line)) {
       seen.add(line);
       lines.push(line);
     }
+  }
+
+  if (lines.length === 1) {
+    lines.push("    [*] --> Idle: No state changes recorded");
   }
 
   return lines.join("\n");

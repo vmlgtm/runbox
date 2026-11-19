@@ -54,12 +54,13 @@ export interface VerifyOptions {
   url?: string;
   fuzz?: boolean;
   seed?: string;
+  concurrency?: number;
 }
 
 /**
- * Boots the isolated runtime box, launches Chromium once, and verifies each target
- * feature in its own fresh BrowserContext with telemetry traps, journey tracking,
- * screenshot capture, and optional fast-check property fuzzing.
+ * Boots the isolated runtime box, launches Chromium once, and verifies target
+ * features in parallel isolated BrowserContexts with telemetry traps, journey tracking,
+ * safe-fuzz write guards, and fast-check shrinking.
  */
 export async function runVerification(
   cwd: string,
@@ -71,7 +72,7 @@ export async function runVerification(
   const screenshotDir = path.join(resolvedCwd, ".runbox", "proof", "screenshots");
   fs.mkdirSync(screenshotDir, { recursive: true });
 
-  const featureResults: FeatureVerificationResult[] = [];
+  let featureResults: FeatureVerificationResult[] = [];
   const allTransitions: StateTransition[] = [];
   const telemetryTotals: TelemetryCounts = {
     consoleErrors: 0,
@@ -79,25 +80,32 @@ export async function runVerification(
     hydrationMismatches: 0,
     server5xx: 0,
   };
+  let actualBaseUrl = options.url ?? config.server?.url ?? "http://127.0.0.1";
+
+  const concurrency = Math.max(1, options.concurrency ?? 4);
 
   await withBoxServer(resolvedCwd, config, { url: options.url }, async (baseUrl) => {
+    actualBaseUrl = baseUrl;
     const browser = await launchBrowser();
     try {
-      for (const feature of options.features) {
-        const result = await verifySingleFeature({
-          browser,
-          baseUrl,
-          config,
-          feature,
-          screenshotDir,
-          cwd: resolvedCwd,
-          enableFuzz: Boolean(options.fuzz || feature.fuzz?.enabled),
-          seedOpt: options.seed,
-        });
+      featureResults = await runWithConcurrency(
+        options.features,
+        concurrency,
+        (feature) =>
+          verifySingleFeature({
+            browser,
+            baseUrl,
+            config,
+            feature,
+            screenshotDir,
+            cwd: resolvedCwd,
+            enableFuzz: Boolean(options.fuzz || feature.fuzz?.enabled),
+            seedOpt: options.seed,
+          })
+      );
 
-        featureResults.push(result);
+      for (const result of featureResults) {
         allTransitions.push(...result.transitions);
-
         telemetryTotals.consoleErrors += result.telemetry.consoleErrors;
         telemetryTotals.uncaughtExceptions += result.telemetry.uncaughtExceptions;
         telemetryTotals.hydrationMismatches += result.telemetry.hydrationMismatches;
@@ -112,7 +120,7 @@ export async function runVerification(
 
   return {
     status,
-    baseUrl: options.url ?? config.server?.url ?? "http://127.0.0.1",
+    baseUrl: actualBaseUrl,
     durationMs: Date.now() - startMs,
     affectedFeatureIds: options.features.map((f) => f.id),
     skippedFeatureIds: options.skippedFeatures.map((f) => f.id),
@@ -120,6 +128,27 @@ export async function runVerification(
     transitions: allTransitions,
     telemetryTotals,
   };
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return [];
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const runnerCount = Math.min(concurrency, items.length);
+  await Promise.all(
+    Array.from({ length: runnerCount }, async () => {
+      while (nextIndex < items.length) {
+        const current = nextIndex++;
+        results[current] = await worker(items[current], current);
+      }
+    })
+  );
+  return results;
 }
 
 async function verifySingleFeature(params: {
@@ -178,6 +207,26 @@ async function verifySingleFeature(params: {
   }
 
   const page = await context.newPage();
+
+  // Register Safe-Fuzz Write Guard FIRST so explicit mocks (registered after) take LIFO precedence
+  let safeFuzzGuardActive = false;
+  if (!(feature.fuzz?.allowMutations)) {
+    await page.route("**/*", async (route) => {
+      const method = route.request().method().toUpperCase();
+      if (
+        safeFuzzGuardActive &&
+        (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE")
+      ) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: '{"runboxDryRun":true}',
+        });
+        return;
+      }
+      await route.fallback();
+    });
+  }
 
   // Register deterministic network/API fixture mocks
   const activeMocks = [...(config.mocks ?? []), ...(feature.mocks ?? [])];
@@ -247,7 +296,7 @@ async function verifySingleFeature(params: {
     await page.waitForTimeout(80);
     telemetry.assertClean();
 
-    let prevState = await captureUiState(page);
+    let prevState = await captureUiState(page, feature.stateLabel);
     transitions.push({
       featureId: feature.id,
       from: "[*]",
@@ -269,7 +318,7 @@ async function verifySingleFeature(params: {
           if (feature.assertInvariants) {
             await feature.assertInvariants({ page, baseUrl });
           }
-          const nextState = await captureUiState(page);
+          const nextState = await captureUiState(page, feature.stateLabel);
           transitions.push({
             featureId: feature.id,
             from: prevState.id,
@@ -296,14 +345,24 @@ async function verifySingleFeature(params: {
     if (enableFuzz) {
       const { seedHex } = parseSeedHex(seedOpt);
       usedSeedHex = seedHex;
+      safeFuzzGuardActive = !(feature.fuzz?.allowMutations);
       const fuzzRes = await runFeatureFuzzer({
         page,
         baseUrl,
         feature,
         telemetry,
-        resetToFeatureStart,
+        resetToFeatureStart: async () => {
+          const prevGuard = safeFuzzGuardActive;
+          safeFuzzGuardActive = false;
+          try {
+            await resetToFeatureStart();
+          } finally {
+            safeFuzzGuardActive = prevGuard;
+          }
+        },
         seedOpt: seedHex,
       });
+      safeFuzzGuardActive = false;
 
       fuzzRuns = fuzzRes.runsExecuted;
       fuzzTransitionsCount = fuzzRes.transitionsExecuted;
@@ -399,6 +458,7 @@ async function verifySingleFeature(params: {
       },
     };
   } finally {
+    safeFuzzGuardActive = false;
     telemetry.detach();
     await context.close();
   }

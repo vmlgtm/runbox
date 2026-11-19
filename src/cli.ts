@@ -16,6 +16,7 @@ import {
 } from "./reporter/agent-json.js";
 import { writeProofBundle } from "./reporter/proof-bundle.js";
 import { discoverLiveRoute, runVerification } from "./runner/verifier.js";
+import { recordRoute } from "./runner/recorder.js";
 import { tui } from "./ui/tui.js";
 
 const program = new Command();
@@ -304,6 +305,65 @@ program
                 `  <${el.tag}> ${el.testId ? `[data-testid="${el.testId}"]` : ""} ${el.text ?? el.ariaLabel ?? ""}`
             ),
             `Same-origin links: ${snapshot.sameOriginLinks.join(", ") || "none"}`,
+          ]);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (opts.agent) {
+          console.log(JSON.stringify({ status: "error", message: msg }));
+        } else {
+          tui.error(msg);
+        }
+        process.exitCode = 1;
+      }
+    }
+  );
+
+program
+  .command("record [route]")
+  .description("Record JSON API mocks, persona cookies/localStorage, and journey steps into .runbox/recordings/")
+  .option("--url <url>", "Attach to an already running server URL")
+  .option("--duration <ms>", "Auto-stop recording after N milliseconds (otherwise stops when browser closes)")
+  .option("--headless", "Run headless (useful for automated fixture capture)")
+  .option("-c, --config <path>", "Path to runbox config file")
+  .option("--agent", "Emit compact JSON output")
+  .action(
+    async (
+      route: string | undefined,
+      opts: {
+        url?: string;
+        duration?: string;
+        headless?: boolean;
+        config?: string;
+        agent?: boolean;
+      }
+    ) => {
+      const cwd = process.cwd();
+      const targetRoute = route ?? "/";
+      if (!opts.agent) tui.intro(`record ${targetRoute}`);
+
+      try {
+        const { config } = await loadConfig(cwd, opts.config);
+        const durationMs = opts.duration ? Number.parseInt(opts.duration, 10) : undefined;
+        if (!opts.agent && !durationMs) {
+          tui.step("Recording session open", [
+            "Interact with the app in Chromium, then close the browser window to save fixtures.",
+          ]);
+        }
+
+        const recorded = await recordRoute(cwd, config, targetRoute, {
+          url: opts.url,
+          headless: Boolean(opts.headless),
+          durationMs: durationMs && !Number.isNaN(durationMs) ? durationMs : undefined,
+        });
+
+        if (opts.agent) {
+          console.log(JSON.stringify({ status: "ok", ...recorded }));
+        } else {
+          tui.step(`Saved recording for ${recorded.route}`, [
+            `API Mocks:  ${recorded.mocksCount} -> ${recorded.mocksPath}`,
+            `Persona:    ${recorded.personaPath}`,
+            `Actions:    ${recorded.actionsCount} -> ${recorded.featurePath}`,
           ]);
         }
       } catch (err) {

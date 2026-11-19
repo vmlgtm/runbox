@@ -83,7 +83,7 @@ function findExecutableInDir(root: string, depth = 0): string | undefined {
   return undefined;
 }
 
-export async function launchBrowser(): Promise<Browser> {
+export async function launchBrowser(options: { headless?: boolean } = {}): Promise<Browser> {
   const executablePath = resolveChromiumExecutablePath();
   if (!executablePath) {
     throw new Error(
@@ -93,7 +93,7 @@ export async function launchBrowser(): Promise<Browser> {
 
   return chromium.launch({
     executablePath,
-    headless: true,
+    headless: options.headless ?? true,
     args: ["--no-sandbox", "--disable-gpu"],
   });
 }

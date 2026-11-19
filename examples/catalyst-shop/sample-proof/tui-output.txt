@@ -8,7 +8,7 @@
 │
 │    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
 │
-│    ✓ Property Fuzz: 8 runs, 56 transitions (seed: 0x42)
+│    ✓ Property Fuzz: 8 runs, 59 transitions (seed: 0x42)
 │
 ◇  Feature: Home (Home) (/)
 │
@@ -16,7 +16,7 @@
 │
 │    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
 │
-│    ✓ Property Fuzz: 8 runs, 56 transitions (seed: 0x42)
+│    ✓ Property Fuzz: 8 runs, 59 transitions (seed: 0x42)
 │
 ◇  Feature: Orders (Orders) (/orders)
 │
@@ -24,7 +24,7 @@
 │
 │    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
 │
-│    ✓ Property Fuzz: 8 runs, 55 transitions (seed: 0x42)
+│    ✓ Property Fuzz: 8 runs, 58 transitions (seed: 0x42)
 │
 ◇  Feature: Product Detail (ProductDetail) (/product/vit-c)
 │
@@ -32,15 +32,15 @@
 │
 │    ✓ Telemetry: 0 console · 0 hydration · 0 5xx
 │
-│    ✓ Property Fuzz: 8 runs, 56 transitions (seed: 0x42)
+│    ✓ Property Fuzz: 8 runs, 59 transitions (seed: 0x42)
 │
 ◇  Proof Bundle ─────────────────────────╮
 │                                        │
 │  Report:      .runbox/proof/report.md  │
-│  Transitions: 111 recorded             │
+│  Transitions: 123 recorded             │
 │  Screenshots: 8 captured               │
 │                                        │
 ├────────────────────────────────────────╯
 │
-└  ✔ Verification passed in 36.38s
+└  ✔ Verification passed in 14.12s
 

@@ -38,6 +38,12 @@ export {
   type RouteDiscoverySnapshot,
   type VerificationRunResult,
 } from "./runner/verifier.js";
+export {
+  recordRoute,
+  type RecordOptions,
+  type RecordResult,
+  type RecordedAction,
+} from "./runner/recorder.js";
 export { InvariantViolationError, type InvariantKind } from "./runner/telemetry.js";
 export { type StateTransition, type UiStateNode } from "./runner/state-fingerprint.js";
 export {

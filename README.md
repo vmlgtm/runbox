@@ -127,8 +127,9 @@ export default defineConfig({
 | :--- | :--- | :--- |
 | `runbox init` | `-f, --force`, `--agent` | Discovers routes, aliases, and dev/start scripts; generates `runbox.config.ts` and `.agents/skills/runbox/SKILL.md`. |
 | `runbox check` | `--diff`, `--tier <p0\|p1\|p2>`, `-c, --config <path>`, `--agent` | Runs static Golden Rule guardrails and walks the reverse import graph from `git status`/`git diff` to affected features. |
-| `runbox verify` | `--diff`, `--feature <id>`, `--tier <p0\|p1\|p2>`, `--fuzz`, `--seed <hex>`, `--url <url>`, `-c, --config <path>`, `--agent` | Runs pre-flight guardrails, boots the server (or attaches to `--url`), runs journeys + telemetry traps + `fast-check` UI fuzzing, and writes `.runbox/proof/report.md`. |
+| `runbox verify` | `--diff`, `--feature <id>`, `--tier <p0\|p1\|p2>`, `--fuzz`, `--seed <hex>`, `--url <url>`, `-c, --config <path>`, `--agent` | Runs pre-flight guardrails, boots the server (or attaches to `--url`), verifies features in parallel isolated contexts with telemetry traps + Safe-Fuzz `fast-check` exploration, and writes `.runbox/proof/report.md`. |
 | `runbox discover [route]` | `--url <url>`, `-c, --config <path>`, `--agent` | Opens a live route in headless Chromium and prints interactive controls (`data-testid`, buttons, inputs) and same-origin links. |
+| `runbox record [route]` | `--url <url>`, `--duration <ms>`, `--headless`, `-c, --config <path>`, `--agent` | Opens Chromium so you can interact with a flow once, auto-capturing JSON API `mocks.json`, cookies/`localStorage` `persona.json`, and a starter `feature.runbox.ts`. |
 
 ---
 
@@ -188,6 +189,12 @@ export default defineConfig({
   guardrails: presets.catalyst(),
 });
 ```
+
+### 4. Production Guardrails & Speed Optimizations
+- **First-Party Telemetry Filtering (`firstPartyConsoleOnly: true`):** Ignores third-party external script errors and configurable `ignoreConsolePatterns` while catching all first-party console/hydration/5xx failures.
+- **Safe-Fuzz Mode (default):** Skips destructive buttons (`Logout`, `Place Order`, `Delete Account`) and dry-runs unmocked write HTTP calls (`POST`/`PUT`/`PATCH`/`DELETE`) during fuzzing unless `fuzz.allowMutations: true` is set.
+- **Parallel Explore-First + Incremental Graph Cache:** Verifies features concurrently in isolated `BrowserContext`s, runs `fast-check` exploration before shrinking only on failure, and caches parsed AST imports in OS temp storage so `check --diff` stays fast on large monorepos.
+- **Zero-Boilerplate Recording (`runbox record`):** Records real API JSON responses, session cookies/`localStorage`, and click/fill journeys into `.runbox/recordings/<slug>/`.
 
 ---
 

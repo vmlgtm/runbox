@@ -36,7 +36,17 @@ const HYDRATION_PATTERN =
  */
 export class TelemetryTrap {
   private readonly page: Page;
-  private readonly invariants: Required<GlobalInvariants>;
+  private readonly invariants: Required<
+    Pick<
+      GlobalInvariants,
+      | "noConsoleErrors"
+      | "noUncaughtExceptions"
+      | "noHydrationMismatch"
+      | "noServer5xx"
+      | "firstPartyConsoleOnly"
+    >
+  >;
+  private readonly ignoreRegexes: RegExp[];
   private readonly origin?: string;
 
   private events: Array<{ kind: InvariantKind; detail: string }> = [];
@@ -73,7 +83,19 @@ export class TelemetryTrap {
     }
 
     if (type === "error") {
-      if (msg.location()?.url?.endsWith("/favicon.ico")) {
+      const locUrl = msg.location()?.url ?? "";
+      if (locUrl.endsWith("/favicon.ico")) {
+        return;
+      }
+      if (
+        this.invariants.firstPartyConsoleOnly &&
+        this.origin &&
+        /^https?:\/\//i.test(locUrl) &&
+        !locUrl.startsWith(this.origin)
+      ) {
+        return;
+      }
+      if (this.ignoreRegexes.some((re) => re.test(text))) {
         return;
       }
       this.totals.consoleErrors++;
@@ -112,7 +134,11 @@ export class TelemetryTrap {
       noUncaughtExceptions: invariants.noUncaughtExceptions ?? true,
       noHydrationMismatch: invariants.noHydrationMismatch ?? true,
       noServer5xx: invariants.noServer5xx ?? true,
+      firstPartyConsoleOnly: invariants.firstPartyConsoleOnly ?? true,
     };
+    this.ignoreRegexes = (invariants.ignoreConsolePatterns ?? []).map(
+      (p) => new RegExp(p)
+    );
 
     this.page.on("pageerror", this.onPageError);
     this.page.on("console", this.onConsole);

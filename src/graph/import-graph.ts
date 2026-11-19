@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { FeatureConfig, FeatureTier, RunboxConfig } from "../config/schema.js";
 import { matchesAnyGlob, toPosixPath, walkFiles } from "../utils/glob.js";
@@ -11,12 +13,23 @@ import {
   type ParsedImport,
 } from "../utils/imports.js";
 
+interface CachedFileImports {
+  mtimeMs: number;
+  size: number;
+  imports: ParsedImport[];
+}
+
+export interface BuildImportGraphOptions {
+  useCache?: boolean;
+}
+
 export interface ImportGraph {
   files: string[];
   aliases: Record<string, string>;
   forwardImports: Map<string, Set<string>>;
   reverseImporters: Map<string, Set<string>>;
   parsedImports: Map<string, ParsedImport[]>;
+  cacheHits?: number;
 }
 
 export interface AffectedFeatureResolution {
@@ -33,13 +46,43 @@ const TIER_PRIORITY: Record<FeatureTier, number> = {
   p2: 2,
 };
 
+function getGraphCachePath(resolvedCwd: string): string {
+  const cwdHash = crypto
+    .createHash("sha1")
+    .update(resolvedCwd)
+    .digest("hex")
+    .slice(0, 16);
+  return path.join(os.tmpdir(), "runbox-graph-cache", `${cwdHash}.json`);
+}
+
+function readGraphCache(cachePath: string): Record<string, CachedFileImports> {
+  try {
+    if (fs.existsSync(cachePath)) {
+      return JSON.parse(fs.readFileSync(cachePath, "utf8")) as Record<string, CachedFileImports>;
+    }
+  } catch {
+    // Ignore corrupt cache and rebuild incrementally
+  }
+  return {};
+}
+
+function writeGraphCache(cachePath: string, data: Record<string, CachedFileImports>): void {
+  try {
+    fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+    fs.writeFileSync(cachePath, JSON.stringify(data), "utf8");
+  } catch {
+    // Best-effort cache write
+  }
+}
+
 /**
  * Builds the forward and reverse module dependency graph for a repository,
- * resolving relative imports, tsconfig paths, and heuristic workspace aliases.
+ * reusing mtime/size-keyed parsed imports from an OS temp cache so repeat runs stay fast.
  */
 export function buildImportGraph(
   cwd: string,
-  explicitAliases?: Record<string, string>
+  explicitAliases?: Record<string, string>,
+  options: BuildImportGraphOptions = {}
 ): ImportGraph {
   const resolvedCwd = path.resolve(cwd);
   const aliases = detectWorkspaceAliases(resolvedCwd, explicitAliases);
@@ -56,10 +99,31 @@ export function buildImportGraph(
     }
   }
 
+  const useCache = options.useCache ?? true;
+  const cachePath = getGraphCachePath(resolvedCwd);
+  const existingCache = useCache ? readGraphCache(cachePath) : {};
+  const nextCache: Record<string, CachedFileImports> = {};
+  let cacheDirty = false;
+  let cacheHits = 0;
+
   for (const relFile of files) {
     const absPath = path.join(resolvedCwd, relFile);
-    const code = fs.readFileSync(absPath, "utf8");
-    const imports = parseImports(code);
+    let imports: ParsedImport[];
+
+    const stat = fs.statSync(absPath);
+    const cached = existingCache[relFile];
+
+    if (useCache && cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+      imports = cached.imports;
+      cacheHits++;
+      nextCache[relFile] = cached;
+    } else {
+      const code = fs.readFileSync(absPath, "utf8");
+      imports = parseImports(code);
+      nextCache[relFile] = { mtimeMs: stat.mtimeMs, size: stat.size, imports };
+      cacheDirty = true;
+    }
+
     parsedImports.set(relFile, imports);
 
     for (const imp of imports) {
@@ -74,12 +138,17 @@ export function buildImportGraph(
     }
   }
 
+  if (useCache && (cacheDirty || Object.keys(existingCache).length !== files.length)) {
+    writeGraphCache(cachePath, nextCache);
+  }
+
   return {
     files,
     aliases,
     forwardImports,
     reverseImporters,
     parsedImports,
+    cacheHits,
   };
 }
 
