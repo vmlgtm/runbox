@@ -2,7 +2,7 @@
 
 A multi-route universal SSR pharmacy & shopping app built with [Catalyst (`catalyst-core`)](https://github.com/tata1mg/catalyst-core) and verified end-to-end with [`runbox`](https://github.com/vmlgtm/runbox).
 
-## Routes & Federated Feature Contracts (`feat/v0.2-enterprise`)
+## Routes & Federated Feature Contracts
 
 Features are co-located alongside their containers via `defineFeature()` and auto-discovered from [runbox.config.ts](runbox.config.ts) (which also uses `presets.catalyst()`, `blastRadius: { maxLocalFeatures: 2 }`, and a `care-plan-member` persona):
 
@@ -15,10 +15,10 @@ Features are co-located alongside their containers via `defineFeature()` and aut
 
 ## Running on Another Machine
 
-### 1. Install and link `runbox` (`feat/v0.2-enterprise`)
+### 1. Install and link `runbox`
 
 ```bash
-git clone -b feat/v0.2-enterprise https://github.com/vmlgtm/runbox.git
+git clone https://github.com/vmlgtm/runbox.git
 cd runbox
 pnpm install
 pnpm run build
@@ -27,10 +27,10 @@ npm link
 
 *(Ensure Playwright Chromium or Google Chrome is installed; if needed run `npx playwright install chromium`.)*
 
-### 2. Clone and install `catalyst-shop` (`feat/v0.2-enterprise`)
+### 2. Clone and install `catalyst-shop`
 
 ```bash
-git clone -b feat/v0.2-enterprise https://github.com/vmlgtm/catalyst-shop.git
+git clone https://github.com/vmlgtm/catalyst-shop.git
 cd catalyst-shop
 npm install
 ```

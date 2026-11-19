@@ -6,7 +6,7 @@ import type { VerificationRunResult } from "../runner/verifier.js";
 
 export const tui = {
   intro(commandLabel: string) {
-    clack.intro(pc.bgCyan(pc.black(` runbox v0.1.0 `)) + " " + pc.dim(commandLabel));
+    clack.intro(pc.bgCyan(pc.black(` runbox v0.2.0 `)) + " " + pc.dim(commandLabel));
   },
 
   step(title: string, details: string[] = []) {

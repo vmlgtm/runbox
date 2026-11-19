@@ -87,6 +87,8 @@ export default defineConfig({
     noUncaughtExceptions: true,
     noHydrationMismatch: true,
     noServer5xx: true,
+    firstPartyConsoleOnly: true,
+    ignoreConsolePatterns: ["ResizeObserver loop"],
   },
   features: [
     {
@@ -108,11 +110,15 @@ export default defineConfig({
           throw new Error(`Cart total invariant violated: ${text}`);
         }
       },
+      stateLabel: async (page) =>
+        `cart:${(await page.textContent('[data-testid="cart-total"]'))?.trim() ?? "empty"}`,
       fuzz: {
         enabled: true,
         scopeSelector: '[data-testid="cart-panel"]',
         steps: 6,
         runs: 10,
+        allowMutations: false,
+        excludeActionPatterns: ["clear-cart"],
       },
     },
   ],
@@ -133,7 +139,7 @@ export default defineConfig({
 
 ---
 
-## Enterprise `v0.2` Capabilities (`feat/v0.2-enterprise`)
+## Enterprise `v0.2` Capabilities
 
 ### 1. Federated Feature Contracts (`defineFeature()`) & Blast-Radius Tiers
 Large repositories can co-locate `*.runbox.ts` contracts next to vertical pods instead of maintaining one giant config file. `runbox` auto-discovers `src/**/*.runbox.{ts,js,mjs}` and `.runbox/features/**/*.{ts,js}` (defaulting `files` ownership to the feature file's directory when omitted):
@@ -194,7 +200,13 @@ export default defineConfig({
 - **First-Party Telemetry Filtering (`firstPartyConsoleOnly: true`):** Ignores third-party external script errors and configurable `ignoreConsolePatterns` while catching all first-party console/hydration/5xx failures.
 - **Safe-Fuzz Mode (default):** Skips destructive buttons (`Logout`, `Place Order`, `Delete Account`) and dry-runs unmocked write HTTP calls (`POST`/`PUT`/`PATCH`/`DELETE`) during fuzzing unless `fuzz.allowMutations: true` is set.
 - **Parallel Explore-First + Incremental Graph Cache:** Verifies features concurrently in isolated `BrowserContext`s, runs `fast-check` exploration before shrinking only on failure, and caches parsed AST imports in OS temp storage so `check --diff` stays fast on large monorepos.
-- **Zero-Boilerplate Recording (`runbox record`):** Records real API JSON responses, session cookies/`localStorage`, and click/fill journeys into `.runbox/recordings/<slug>/`.
+- **Zero-Boilerplate Recording (`runbox record`):** Records real API JSON responses, session cookies/`localStorage`, and click/fill journeys into `.runbox/recordings/<slug>/`:
+
+```bash
+npx runbox record /cart --url http://localhost:3005
+# Saves .runbox/recordings/cart/{mocks.json,persona.json,feature.runbox.ts}
+npx runbox verify --feature route-cart --fuzz
+```
 
 ---
 
